@@ -1,84 +1,114 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { usePlatform } from '@/contexts/PlatformContext';
-import { Store, Mail, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { Store, Mail, ArrowRight, Loader2, CheckCircle, Lock, User } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
+import { z } from 'zod';
+import { useToast } from '@/hooks/use-toast';
 
-type AuthStep = 'email' | 'otp' | 'success';
-type UserRole = 'customer' | 'seller';
+type AuthMode = 'signin' | 'signup';
+
+const emailSchema = z.string().email('Please enter a valid email address');
+const passwordSchema = z.string().min(8, 'Password must be at least 8 characters');
 
 const Auth = () => {
   const { settings } = usePlatform();
-  const [step, setStep] = useState<AuthStep>('email');
+  const { user, userRole, signIn, signUp, isLoading: authLoading } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  
+  const [mode, setMode] = useState<AuthMode>('signin');
   const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
-  const [role, setRole] = useState<UserRole>('customer');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSendOTP = async (e: React.FormEvent) => {
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user && !authLoading) {
+      if (userRole === 'super_admin') {
+        navigate('/admin');
+      } else if (userRole === 'seller') {
+        navigate('/seller/dashboard');
+      } else {
+        navigate('/');
+      }
+    }
+  }, [user, userRole, authLoading, navigate]);
+
+  const validateForm = () => {
+    try {
+      emailSchema.parse(email);
+      passwordSchema.parse(password);
+      return true;
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        setError(e.errors[0].message);
+      }
+      return false;
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     
-    if (!email || !email.includes('@')) {
-      setError('Please enter a valid email address');
-      return;
-    }
+    if (!validateForm()) return;
 
     setIsLoading(true);
-    
-    // Simulate OTP sending
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    setIsLoading(false);
-    setStep('otp');
-  };
 
-  const handleOTPChange = (index: number, value: string) => {
-    if (value.length > 1) return;
-    
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
-
-    // Auto-focus next input
-    if (value && index < 5) {
-      const nextInput = document.getElementById(`otp-${index + 1}`);
-      nextInput?.focus();
+    try {
+      if (mode === 'signup') {
+        const { error } = await signUp(email, password, fullName);
+        if (error) {
+          if (error.message.includes('already registered')) {
+            setError('This email is already registered. Please sign in instead.');
+          } else {
+            setError(error.message);
+          }
+        } else {
+          toast({
+            title: 'Account created!',
+            description: 'Welcome to ' + settings.siteName
+          });
+        }
+      } else {
+        const { error } = await signIn(email, password);
+        if (error) {
+          if (error.message.includes('Invalid login credentials')) {
+            setError('Invalid email or password. Please try again.');
+          } else {
+            setError(error.message);
+          }
+        } else {
+          toast({
+            title: 'Welcome back!',
+            description: 'You have successfully signed in.'
+          });
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleVerifyOTP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    const otpValue = otp.join('');
-    if (otpValue.length !== 6) {
-      setError('Please enter the complete 6-digit code');
-      return;
-    }
-
-    setIsLoading(true);
-    
-    // Simulate OTP verification
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    setIsLoading(false);
-    setStep('success');
-  };
-
-  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      const prevInput = document.getElementById(`otp-${index - 1}`);
-      prevInput?.focus();
-    }
-  };
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <>
       <Helmet>
-        <title>Sign In - {settings.siteName}</title>
+        <title>{mode === 'signin' ? 'Sign In' : 'Sign Up'} - {settings.siteName}</title>
         <meta name="description" content="Sign in to your account or create a new one" />
       </Helmet>
 
@@ -96,163 +126,117 @@ const Auth = () => {
               </span>
             </Link>
 
-            {step === 'email' && (
-              <div className="mt-8 animate-fade-in">
-                <h1 className="font-display text-2xl font-bold text-foreground">
-                  Welcome back
-                </h1>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Enter your email to receive a one-time password
-                </p>
+            <div className="mt-8 animate-fade-in">
+              <h1 className="font-display text-2xl font-bold text-foreground">
+                {mode === 'signin' ? 'Welcome back' : 'Create your account'}
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {mode === 'signin' 
+                  ? 'Enter your credentials to access your account' 
+                  : 'Join our marketplace community today'}
+              </p>
 
-                {/* Role Selection */}
-                <div className="mt-6 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setRole('customer')}
-                    className={`flex-1 rounded-xl border px-4 py-3 text-sm font-medium transition-all ${
-                      role === 'customer'
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border bg-card text-muted-foreground hover:bg-muted'
-                    }`}
-                  >
-                    I'm a Buyer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole('seller')}
-                    className={`flex-1 rounded-xl border px-4 py-3 text-sm font-medium transition-all ${
-                      role === 'seller'
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border bg-card text-muted-foreground hover:bg-muted'
-                    }`}
-                  >
-                    I'm a Seller
-                  </button>
-                </div>
-
-                <form onSubmit={handleSendOTP} className="mt-6 space-y-4">
+              <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+                {mode === 'signup' && (
                   <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-foreground">
-                      Email address
+                    <label htmlFor="fullName" className="block text-sm font-medium text-foreground">
+                      Full Name
                     </label>
                     <div className="relative mt-1">
-                      <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                      <User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                       <input
-                        id="email"
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="you@example.com"
+                        id="fullName"
+                        type="text"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        placeholder="John Doe"
                         className="w-full rounded-xl border border-input bg-background py-3 pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        required
                       />
                     </div>
                   </div>
+                )}
 
-                  {error && (
-                    <p className="text-sm text-destructive">{error}</p>
-                  )}
-
-                  <Button type="submit" variant="hero" className="w-full" size="lg" disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Sending OTP...
-                      </>
-                    ) : (
-                      <>
-                        Continue
-                        <ArrowRight className="h-4 w-4" />
-                      </>
-                    )}
-                  </Button>
-                </form>
-
-                <p className="mt-6 text-center text-sm text-muted-foreground">
-                  Don't have an account?{' '}
-                  <span className="font-medium text-primary">Sign up for free</span>
-                </p>
-              </div>
-            )}
-
-            {step === 'otp' && (
-              <div className="mt-8 animate-fade-in">
-                <h1 className="font-display text-2xl font-bold text-foreground">
-                  Check your email
-                </h1>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  We sent a 6-digit code to <span className="font-medium text-foreground">{email}</span>
-                </p>
-
-                <form onSubmit={handleVerifyOTP} className="mt-6 space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-3">
-                      Enter verification code
-                    </label>
-                    <div className="flex gap-2">
-                      {otp.map((digit, index) => (
-                        <input
-                          key={index}
-                          id={`otp-${index}`}
-                          type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          maxLength={1}
-                          value={digit}
-                          onChange={(e) => handleOTPChange(index, e.target.value)}
-                          onKeyDown={(e) => handleKeyDown(index, e)}
-                          className="h-12 w-12 rounded-xl border border-input bg-background text-center text-xl font-bold text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        />
-                      ))}
-                    </div>
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-foreground">
+                    Email address
+                  </label>
+                  <div className="relative mt-1">
+                    <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full rounded-xl border border-input bg-background py-3 pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      required
+                    />
                   </div>
-
-                  {error && (
-                    <p className="text-sm text-destructive">{error}</p>
-                  )}
-
-                  <Button type="submit" variant="hero" className="w-full" size="lg" disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Verifying...
-                      </>
-                    ) : (
-                      'Verify & Sign In'
-                    )}
-                  </Button>
-                </form>
-
-                <button
-                  type="button"
-                  onClick={() => setStep('email')}
-                  className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-primary"
-                >
-                  Didn't receive the code? <span className="font-medium">Try again</span>
-                </button>
-              </div>
-            )}
-
-            {step === 'success' && (
-              <div className="mt-8 text-center animate-fade-in">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success/10 text-success">
-                  <CheckCircle className="h-8 w-8" />
                 </div>
-                <h1 className="mt-4 font-display text-2xl font-bold text-foreground">
-                  Welcome!
-                </h1>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  You've successfully signed in to your account
-                </p>
-                <Link to={role === 'seller' ? '/seller/dashboard' : '/'}>
-                  <Button variant="hero" className="mt-6" size="lg">
-                    {role === 'seller' ? 'Go to Dashboard' : 'Start Shopping'}
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-            )}
+
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-foreground">
+                    Password
+                  </label>
+                  <div className="relative mt-1">
+                    <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full rounded-xl border border-input bg-background py-3 pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
+
+                <Button type="submit" variant="hero" className="w-full" size="lg" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {mode === 'signin' ? 'Signing in...' : 'Creating account...'}
+                    </>
+                  ) : (
+                    <>
+                      {mode === 'signin' ? 'Sign In' : 'Create Account'}
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              </form>
+
+              <p className="mt-6 text-center text-sm text-muted-foreground">
+                {mode === 'signin' ? (
+                  <>
+                    Don't have an account?{' '}
+                    <button 
+                      onClick={() => { setMode('signup'); setError(''); }}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      Sign up for free
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Already have an account?{' '}
+                    <button 
+                      onClick={() => { setMode('signin'); setError(''); }}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      Sign in
+                    </button>
+                  </>
+                )}
+              </p>
+            </div>
           </div>
         </div>
 
