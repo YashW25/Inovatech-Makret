@@ -512,6 +512,7 @@ export type Database = {
         Args: { _seller_id: string; _user_id: string }
         Returns: boolean
       }
+      seed_super_admin: { Args: never; Returns: undefined }
     }
     Enums: {
       app_role: "super_admin" | "seller" | "customer"
