@@ -8,16 +8,16 @@ interface Order {
   id: string;
   customer_id: string | null;
   order_number: string;
-  status: OrderStatus;
+  status: OrderStatus | null;
   subtotal: number;
-  shipping_fee: number;
-  tax: number;
+  shipping_fee: number | null;
+  tax: number | null;
   total: number;
   shipping_address: any;
   payment_method: string | null;
-  payment_status: string;
+  payment_status: string | null;
   notes: string | null;
-  created_at: string;
+  created_at: string | null;
   order_items?: OrderItem[];
 }
 
@@ -50,34 +50,61 @@ export const useCustomerOrders = () => {
         .eq('customer_id', user.id)
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
-      return data as Order[];
+      if (error) {
+        console.error('Error fetching customer orders:', error);
+        return [];
+      }
+      return (data || []) as Order[];
     },
-    enabled: !!user
+    enabled: !!user,
+    placeholderData: []
   });
 };
 
 export const useSellerOrders = (sellerId: string) => {
   return useQuery({
     queryKey: ['seller-orders', sellerId],
-    queryFn: async () => {
-      const { data, error } = await supabase
+    queryFn: async (): Promise<Order[]> => {
+      if (!sellerId) return [];
+      
+      // First get order items for this seller
+      const { data: orderItems, error: itemsError } = await supabase
         .from('order_items')
-        .select(`
-          *,
-          orders!inner(*)
-        `)
-        .eq('seller_id', sellerId)
+        .select('order_id')
+        .eq('seller_id', sellerId);
+      
+      if (itemsError) {
+        console.error('Error fetching seller order items:', itemsError);
+        return [];
+      }
+      
+      if (!orderItems || orderItems.length === 0) return [];
+      
+      // Get unique order IDs
+      const orderIds = [...new Set(orderItems.map(item => item.order_id))];
+      
+      // Then fetch those orders
+      const { data: orders, error: ordersError } = await supabase
+        .from('orders')
+        .select('*')
+        .in('id', orderIds)
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
-      return data;
+      if (ordersError) {
+        console.error('Error fetching seller orders:', ordersError);
+        return [];
+      }
+      
+      return (orders || []) as Order[];
     },
-    enabled: !!sellerId
+    enabled: !!sellerId,
+    placeholderData: []
   });
 };
 
 export const useAllOrders = () => {
+  const { userRole } = useAuth();
+  
   return useQuery({
     queryKey: ['all-orders'],
     queryFn: async () => {
@@ -89,8 +116,13 @@ export const useAllOrders = () => {
         `)
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
-      return data as Order[];
-    }
+      if (error) {
+        console.error('Error fetching all orders:', error);
+        return [];
+      }
+      return (data || []) as Order[];
+    },
+    enabled: userRole === 'super_admin',
+    placeholderData: []
   });
 };
