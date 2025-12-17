@@ -1,10 +1,13 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Heart, ShoppingCart, ArrowRight, Star, MessageSquare } from 'lucide-react';
+import { Heart, ShoppingCart, ArrowRight, Star, MessageSquare, Loader2 } from 'lucide-react';
+import { useProducts } from '@/hooks/useProducts';
+import { useCart } from '@/contexts/CartContext';
 
-const products = [
+// Fallback demo products when database is empty
+const demoProducts = [
   {
-    id: 1,
+    id: 'demo-1',
     name: 'Handwoven Rattan Basket Set',
     seller: 'ArtisanHome',
     price: 79.99,
@@ -16,7 +19,7 @@ const products = [
     badge: 'Best Seller',
   },
   {
-    id: 2,
+    id: 'demo-2',
     name: 'Vintage Leather Journal',
     seller: 'CraftedMemories',
     price: 45.00,
@@ -26,7 +29,7 @@ const products = [
     allowBargain: true,
   },
   {
-    id: 3,
+    id: 'demo-3',
     name: 'Ceramic Plant Pot Collection',
     seller: 'GreenThumb',
     price: 65.00,
@@ -37,7 +40,7 @@ const products = [
     badge: 'Sale',
   },
   {
-    id: 4,
+    id: 'demo-4',
     name: 'Minimalist Wall Clock',
     seller: 'ModernSpaces',
     price: 120.00,
@@ -47,7 +50,7 @@ const products = [
     allowBargain: true,
   },
   {
-    id: 5,
+    id: 'demo-5',
     name: 'Organic Cotton Throw Blanket',
     seller: 'CozyNest',
     price: 89.99,
@@ -57,7 +60,7 @@ const products = [
     badge: 'New',
   },
   {
-    id: 6,
+    id: 'demo-6',
     name: 'Hand-painted Ceramic Mug Set',
     seller: 'StudioCeramics',
     price: 55.00,
@@ -67,7 +70,7 @@ const products = [
     image: '☕',
   },
   {
-    id: 7,
+    id: 'demo-7',
     name: 'Boho Macrame Wall Hanging',
     seller: 'ThreadArtistry',
     price: 95.00,
@@ -77,7 +80,7 @@ const products = [
     allowBargain: true,
   },
   {
-    id: 8,
+    id: 'demo-8',
     name: 'Brass Candle Holder Set',
     seller: 'LuxeDecor',
     price: 75.00,
@@ -88,6 +91,38 @@ const products = [
 ];
 
 const FeaturedProducts = () => {
+  const { data: dbProducts, isLoading } = useProducts();
+  const { addItem } = useCart();
+
+  // Use database products if available, otherwise show demo products
+  const hasDbProducts = dbProducts && dbProducts.length > 0;
+  
+  const displayProducts = hasDbProducts 
+    ? dbProducts.slice(0, 8).map((p, index) => ({
+        id: p.id,
+        name: p.name,
+        seller: p.sellers?.business_name || 'Seller',
+        price: Number(p.price),
+        originalPrice: p.compare_price ? Number(p.compare_price) : undefined,
+        rating: 4.5 + Math.random() * 0.5,
+        reviews: Math.floor(50 + Math.random() * 150),
+        image: p.images?.[0] || '📦',
+        allowBargain: p.allow_bargain || false,
+        badge: index === 0 ? 'Best Seller' : p.compare_price ? 'Sale' : undefined,
+      }))
+    : demoProducts;
+
+  const handleAddToCart = (product: typeof displayProducts[0]) => {
+    addItem({
+      productId: product.id,
+      name: product.name,
+      price: product.price,
+      image: product.image,
+      sellerId: 'demo-seller',
+      sellerName: product.seller
+    });
+  };
+
   return (
     <section className="bg-muted/30 py-16 lg:py-24">
       <div className="container px-4 lg:px-8">
@@ -109,83 +144,89 @@ const FeaturedProducts = () => {
           </Link>
         </div>
 
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {products.map((product, index) => (
-            <div
-              key={product.id}
-              className="group relative overflow-hidden rounded-2xl border border-border bg-card transition-all duration-300 hover:-translate-y-1 hover:shadow-xl animate-slide-up"
-              style={{ animationDelay: `${index * 0.05}s` }}
-            >
-              {/* Badge */}
-              {product.badge && (
-                <div className={`absolute left-3 top-3 z-10 rounded-full px-3 py-1 text-xs font-semibold ${
-                  product.badge === 'Sale' ? 'bg-destructive text-destructive-foreground' :
-                  product.badge === 'New' ? 'bg-success text-success-foreground' :
-                  'bg-primary text-primary-foreground'
-                }`}>
-                  {product.badge}
-                </div>
-              )}
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {displayProducts.map((product, index) => (
+              <div
+                key={product.id}
+                className="group relative overflow-hidden rounded-2xl border border-border bg-card transition-all duration-300 hover:-translate-y-1 hover:shadow-xl animate-slide-up"
+                style={{ animationDelay: `${index * 0.05}s` }}
+              >
+                {/* Badge */}
+                {product.badge && (
+                  <div className={`absolute left-3 top-3 z-10 rounded-full px-3 py-1 text-xs font-semibold ${
+                    product.badge === 'Sale' ? 'bg-destructive text-destructive-foreground' :
+                    product.badge === 'New' ? 'bg-success text-success-foreground' :
+                    'bg-primary text-primary-foreground'
+                  }`}>
+                    {product.badge}
+                  </div>
+                )}
 
-              {/* Wishlist Button */}
-              <button className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm text-muted-foreground opacity-0 transition-all hover:bg-background hover:text-destructive group-hover:opacity-100">
-                <Heart className="h-4 w-4" />
-              </button>
+                {/* Wishlist Button */}
+                <button className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm text-muted-foreground opacity-0 transition-all hover:bg-background hover:text-destructive group-hover:opacity-100">
+                  <Heart className="h-4 w-4" />
+                </button>
 
-              {/* Image */}
-              <div className="relative aspect-square bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">
-                <span className="text-7xl transition-transform duration-300 group-hover:scale-110">
-                  {product.image}
-                </span>
-              </div>
-
-              {/* Content */}
-              <div className="p-4">
-                <Link to={`/products/${product.id}`}>
-                  <h3 className="font-display font-semibold text-foreground line-clamp-1 hover:text-primary transition-colors">
-                    {product.name}
-                  </h3>
+                {/* Image */}
+                <Link to={`/product/${product.id}`} className="relative aspect-square bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">
+                  <span className="text-7xl transition-transform duration-300 group-hover:scale-110">
+                    {product.image}
+                  </span>
                 </Link>
-                <p className="text-sm text-muted-foreground">{product.seller}</p>
 
-                {/* Rating */}
-                <div className="mt-2 flex items-center gap-1">
-                  <Star className="h-4 w-4 fill-warning text-warning" />
-                  <span className="text-sm font-medium text-foreground">{product.rating}</span>
-                  <span className="text-sm text-muted-foreground">({product.reviews})</span>
-                </div>
+                {/* Content */}
+                <div className="p-4">
+                  <Link to={`/product/${product.id}`}>
+                    <h3 className="font-display font-semibold text-foreground line-clamp-1 hover:text-primary transition-colors">
+                      {product.name}
+                    </h3>
+                  </Link>
+                  <p className="text-sm text-muted-foreground">{product.seller}</p>
 
-                {/* Price & Actions */}
-                <div className="mt-3 flex items-center justify-between">
-                  <div>
-                    <span className="font-display text-xl font-bold text-primary">
-                      ${product.price.toFixed(2)}
-                    </span>
-                    {product.originalPrice && (
-                      <span className="ml-2 text-sm text-muted-foreground line-through">
-                        ${product.originalPrice.toFixed(2)}
+                  {/* Rating */}
+                  <div className="mt-2 flex items-center gap-1">
+                    <Star className="h-4 w-4 fill-warning text-warning" />
+                    <span className="text-sm font-medium text-foreground">{product.rating.toFixed(1)}</span>
+                    <span className="text-sm text-muted-foreground">({product.reviews})</span>
+                  </div>
+
+                  {/* Price & Actions */}
+                  <div className="mt-3 flex items-center justify-between">
+                    <div>
+                      <span className="font-display text-xl font-bold text-primary">
+                        ${product.price.toFixed(2)}
                       </span>
+                      {product.originalPrice && (
+                        <span className="ml-2 text-sm text-muted-foreground line-through">
+                          ${product.originalPrice.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="mt-3 flex gap-2">
+                    <Button size="sm" className="flex-1" onClick={() => handleAddToCart(product)}>
+                      <ShoppingCart className="h-4 w-4" />
+                      Add
+                    </Button>
+                    {product.allowBargain && (
+                      <Button size="sm" variant="outline" className="flex-1">
+                        <MessageSquare className="h-4 w-4" />
+                        Offer
+                      </Button>
                     )}
                   </div>
                 </div>
-
-                {/* Action Buttons */}
-                <div className="mt-3 flex gap-2">
-                  <Button size="sm" className="flex-1">
-                    <ShoppingCart className="h-4 w-4" />
-                    Add
-                  </Button>
-                  {product.allowBargain && (
-                    <Button size="sm" variant="outline" className="flex-1">
-                      <MessageSquare className="h-4 w-4" />
-                      Offer
-                    </Button>
-                  )}
-                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         <Link
           to="/products"
