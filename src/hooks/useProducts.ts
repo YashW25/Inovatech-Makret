@@ -36,12 +36,12 @@ export const useProducts = (categorySlug?: string, searchQuery?: string) => {
         .from('products')
         .select(`
           *,
-          sellers!inner(business_name),
+          sellers(business_name),
           categories(name, slug)
         `)
         .eq('is_active', true);
       
-      if (categorySlug) {
+      if (categorySlug && categorySlug !== 'all') {
         query = query.eq('categories.slug', categorySlug);
       }
       
@@ -51,9 +51,16 @@ export const useProducts = (categorySlug?: string, searchQuery?: string) => {
       
       const { data, error } = await query.order('created_at', { ascending: false });
       
-      if (error) throw error;
-      return data as Product[];
-    }
+      if (error) {
+        console.error('Error fetching products:', error);
+        return [];
+      }
+      
+      // Filter out products where seller relation failed (due to RLS)
+      const validProducts = (data || []).filter(p => p.sellers !== null);
+      return validProducts as Product[];
+    },
+    placeholderData: []
   });
 };
 
@@ -71,7 +78,10 @@ export const useProduct = (productId: string) => {
         .eq('id', productId)
         .maybeSingle();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching product:', error);
+        return null;
+      }
       return data as Product | null;
     },
     enabled: !!productId
@@ -88,10 +98,14 @@ export const useSellerProducts = (sellerId: string) => {
         .eq('seller_id', sellerId)
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
-      return data as Product[];
+      if (error) {
+        console.error('Error fetching seller products:', error);
+        return [];
+      }
+      return (data || []) as Product[];
     },
-    enabled: !!sellerId
+    enabled: !!sellerId,
+    placeholderData: []
   });
 };
 
@@ -127,12 +141,14 @@ export const useCreateProduct = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['seller-products'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
       toast({
         title: 'Product created',
         description: 'Your product has been added successfully.'
       });
     },
     onError: (error) => {
+      console.error('Error creating product:', error);
       toast({
         title: 'Error',
         description: 'Failed to create product. Please try again.',
