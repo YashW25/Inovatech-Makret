@@ -8,7 +8,7 @@ type AppRole = 'super_admin' | 'seller' | 'customer';
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  userRole: AppRole | null;
+  userRole: AppRole;
   isLoading: boolean;
   signUp: (email: string, password: string, fullName?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -22,11 +22,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [userRole, setUserRole] = useState<AppRole | null>(null);
+  const [userRole, setUserRole] = useState<AppRole>('customer'); // Default to customer, never null
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchUserRole = async (userId: string) => {
+  const fetchUserRole = async (userId: string): Promise<AppRole> => {
     try {
       const { data, error } = await supabase
         .from('user_roles')
@@ -36,52 +36,73 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (error) {
         console.error('Error fetching user role:', error);
-        return null;
+        return 'customer'; // Default to customer on error
       }
       
-      return data?.role as AppRole | null;
+      return (data?.role as AppRole) || 'customer';
     } catch (err) {
       console.error('Error in fetchUserRole:', err);
-      return null;
+      return 'customer'; // Default to customer on error
     }
   };
 
   useEffect(() => {
+    let mounted = true;
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (!mounted) return;
+        
         setSession(session);
         setUser(session?.user ?? null);
         
         // Defer role fetching with setTimeout to prevent deadlock
         if (session?.user) {
-          setTimeout(() => {
-            fetchUserRole(session.user.id).then(role => {
+          setTimeout(async () => {
+            if (!mounted) return;
+            const role = await fetchUserRole(session.user.id);
+            if (mounted) {
               setUserRole(role);
-            });
+            }
           }, 0);
         } else {
-          setUserRole(null);
+          setUserRole('customer'); // Reset to default when logged out
         }
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchUserRole(session.user.id).then(role => {
-          setUserRole(role);
+    const initializeAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
+        
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          const role = await fetchUserRole(session.user.id);
+          if (mounted) {
+            setUserRole(role);
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        if (mounted) {
           setIsLoading(false);
-        });
-      } else {
-        setIsLoading(false);
+        }
       }
-    });
+    };
 
-    return () => subscription.unsubscribe();
+    initializeAuth();
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signUp = async (email: string, password: string, fullName?: string) => {
@@ -124,7 +145,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
-    setUserRole(null);
+    setUserRole('customer'); // Reset to default
   };
 
   const sendOTP = async (email: string) => {

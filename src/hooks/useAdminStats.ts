@@ -13,42 +13,55 @@ interface AdminStats {
 export const useAdminStats = () => {
   return useQuery({
     queryKey: ['admin-stats'],
-    queryFn: async () => {
-      // Get seller counts by status
-      const { data: sellers } = await supabase
-        .from('sellers')
-        .select('status');
+    queryFn: async (): Promise<AdminStats> => {
+      // Try using the admin function first (bypasses RLS)
+      const { data: statsData, error: statsError } = await supabase
+        .rpc('admin_get_stats');
       
-      const activeSellers = sellers?.filter(s => s.status === 'active').length || 0;
-      const pendingSellers = sellers?.filter(s => s.status === 'pending').length || 0;
-      const suspendedSellers = sellers?.filter(s => s.status === 'suspended').length || 0;
+      if (!statsError && statsData && statsData.length > 0) {
+        const stats = statsData[0];
+        return {
+          totalRevenue: Number(stats.total_revenue) || 0,
+          activeSellers: Number(stats.active_sellers) || 0,
+          totalProducts: Number(stats.total_products) || 0,
+          totalCustomers: Number(stats.total_customers) || 0,
+          pendingSellers: Number(stats.pending_sellers) || 0,
+          suspendedSellers: Number(stats.suspended_sellers) || 0
+        };
+      }
 
-      // Get total products
-      const { count: totalProducts } = await supabase
-        .from('products')
-        .select('id', { count: 'exact', head: true });
+      // Fallback: Direct queries (may be limited by RLS)
+      const [sellersRes, productsRes, customersRes, ordersRes] = await Promise.all([
+        supabase.from('sellers').select('status'),
+        supabase.from('products').select('id', { count: 'exact', head: true }),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }),
+        supabase.from('orders').select('total').eq('payment_status', 'paid')
+      ]);
 
-      // Get total customers (profiles count)
-      const { count: totalCustomers } = await supabase
-        .from('profiles')
-        .select('id', { count: 'exact', head: true });
+      const sellers = sellersRes.data || [];
+      const activeSellers = sellers.filter(s => s.status === 'active').length;
+      const pendingSellers = sellers.filter(s => s.status === 'pending').length;
+      const suspendedSellers = sellers.filter(s => s.status === 'suspended').length;
 
-      // Get total revenue from orders
-      const { data: orders } = await supabase
-        .from('orders')
-        .select('total')
-        .eq('payment_status', 'paid');
-      
-      const totalRevenue = orders?.reduce((sum, order) => sum + Number(order.total), 0) || 0;
+      const totalRevenue = (ordersRes.data || []).reduce((sum, order) => sum + Number(order.total || 0), 0);
 
       return {
         totalRevenue,
         activeSellers,
-        totalProducts: totalProducts || 0,
-        totalCustomers: totalCustomers || 0,
+        totalProducts: productsRes.count || 0,
+        totalCustomers: customersRes.count || 0,
         pendingSellers,
         suspendedSellers
-      } as AdminStats;
+      };
+    },
+    // Return default values while loading
+    placeholderData: {
+      totalRevenue: 0,
+      activeSellers: 0,
+      totalProducts: 0,
+      totalCustomers: 0,
+      pendingSellers: 0,
+      suspendedSellers: 0
     }
   });
 };

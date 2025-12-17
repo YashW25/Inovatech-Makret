@@ -497,6 +497,65 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_get_all_sellers: {
+        Args: never
+        Returns: {
+          business_name: string
+          commission_rate: number | null
+          created_at: string | null
+          description: string | null
+          id: string
+          logo_url: string | null
+          pending_charges: number | null
+          status: Database["public"]["Enums"]["seller_status"] | null
+          subscription_due_date: string | null
+          subscription_fee: number | null
+          total_earnings: number | null
+          updated_at: string | null
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "sellers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      admin_get_sellers_by_status: {
+        Args: { seller_status: Database["public"]["Enums"]["seller_status"] }
+        Returns: {
+          business_name: string
+          commission_rate: number | null
+          created_at: string | null
+          description: string | null
+          id: string
+          logo_url: string | null
+          pending_charges: number | null
+          status: Database["public"]["Enums"]["seller_status"] | null
+          subscription_due_date: string | null
+          subscription_fee: number | null
+          total_earnings: number | null
+          updated_at: string | null
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "sellers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      admin_get_stats: {
+        Args: never
+        Returns: {
+          active_sellers: number
+          pending_sellers: number
+          suspended_sellers: number
+          total_customers: number
+          total_products: number
+          total_revenue: number
+        }[]
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
