@@ -18,22 +18,9 @@ import {
   MessageSquare,
   Star,
   X,
-  Loader2
+  Loader2,
+  Package
 } from 'lucide-react';
-
-// Fallback demo products when database is empty
-const demoProducts = [
-  { id: 'demo-1', name: 'Handwoven Rattan Basket Set', seller: 'ArtisanHome', price: 79.99, originalPrice: 99.99, rating: 4.8, reviews: 124, image: '🧺', allowBargain: true, category: 'home' },
-  { id: 'demo-2', name: 'Vintage Leather Journal', seller: 'CraftedMemories', price: 45.00, rating: 4.9, reviews: 89, image: '📔', allowBargain: true, category: 'art' },
-  { id: 'demo-3', name: 'Ceramic Plant Pot Collection', seller: 'GreenThumb', price: 65.00, originalPrice: 85.00, rating: 4.7, reviews: 156, image: '🪴', category: 'home' },
-  { id: 'demo-4', name: 'Minimalist Wall Clock', seller: 'ModernSpaces', price: 120.00, rating: 4.6, reviews: 67, image: '🕐', allowBargain: true, category: 'home' },
-  { id: 'demo-5', name: 'Organic Cotton Throw Blanket', seller: 'CozyNest', price: 89.99, rating: 4.9, reviews: 203, image: '🛋️', category: 'home' },
-  { id: 'demo-6', name: 'Hand-painted Ceramic Mug Set', seller: 'StudioCeramics', price: 55.00, originalPrice: 70.00, rating: 4.8, reviews: 178, image: '☕', category: 'home' },
-  { id: 'demo-7', name: 'Boho Macrame Wall Hanging', seller: 'ThreadArtistry', price: 95.00, rating: 4.7, reviews: 92, image: '🎀', allowBargain: true, category: 'art' },
-  { id: 'demo-8', name: 'Brass Candle Holder Set', seller: 'LuxeDecor', price: 75.00, rating: 4.5, reviews: 54, image: '🕯️', category: 'home' },
-];
-
-const defaultCategories = ['All', 'Home', 'Fashion', 'Art', 'Vintage', 'Electronics', 'Jewelry'];
 
 const Products = () => {
   const { settings } = usePlatform();
@@ -49,31 +36,27 @@ const Products = () => {
   );
   const { data: dbCategories } = useCategories();
 
-  // Use database products if available, otherwise show demo products
-  const hasDbProducts = dbProducts && dbProducts.length > 0;
-  
-  const displayProducts = hasDbProducts 
-    ? dbProducts.map(p => ({
-        id: p.id,
-        name: p.name,
-        seller: p.sellers?.business_name || 'Seller',
-        price: Number(p.price),
-        originalPrice: p.compare_price ? Number(p.compare_price) : undefined,
-        rating: 4.5 + Math.random() * 0.5, // Random rating for demo
-        reviews: Math.floor(50 + Math.random() * 150),
-        image: p.images?.[0] || '📦',
-        allowBargain: p.allow_bargain || false,
-        category: p.categories?.slug || 'home'
-      }))
-    : demoProducts;
+  // Map database products to display format
+  const displayProducts = (dbProducts || []).map(p => ({
+    id: p.id,
+    name: p.name,
+    seller: p.sellers?.business_name || 'Seller',
+    sellerId: p.seller_id,
+    price: Number(p.price),
+    originalPrice: p.compare_price ? Number(p.compare_price) : undefined,
+    rating: 4.5 + Math.random() * 0.5,
+    reviews: Math.floor(50 + Math.random() * 150),
+    image: p.images?.[0] || '📦',
+    allowBargain: p.allow_bargain || false,
+    category: p.categories?.slug || 'home',
+    stock: p.stock || 0
+  }));
 
-  // Filter by category and search
+  // Filter by search
   const filteredProducts = displayProducts.filter(p => {
-    const matchesCategory = selectedCategory === 'All' || 
-      p.category.toLowerCase().includes(selectedCategory.toLowerCase());
     const matchesSearch = !searchQuery || 
       p.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+    return matchesSearch;
   });
 
   // Sort products
@@ -92,7 +75,7 @@ const Products = () => {
 
   const categories = dbCategories && dbCategories.length > 0
     ? ['All', ...dbCategories.map(c => c.name)]
-    : defaultCategories;
+    : ['All'];
 
   const handleAddToCart = (product: typeof displayProducts[0]) => {
     addItem({
@@ -100,7 +83,7 @@ const Products = () => {
       name: product.name,
       price: product.price,
       image: product.image,
-      sellerId: 'demo-seller',
+      sellerId: product.sellerId,
       sellerName: product.seller
     });
   };
@@ -123,7 +106,6 @@ const Products = () => {
             </h1>
             <p className="mt-2 text-muted-foreground">
               {loadingProducts ? 'Loading...' : `Showing ${sortedProducts.length} products`}
-              {!hasDbProducts && ' (Demo Mode)'}
             </p>
           </div>
 
@@ -261,8 +243,19 @@ const Products = () => {
             </div>
           )}
 
+          {/* Empty State */}
+          {!loadingProducts && sortedProducts.length === 0 && (
+            <div className="text-center py-16">
+              <Package className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <h2 className="text-xl font-semibold text-foreground mb-2">No Products Yet</h2>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                There are no products available at the moment. Check back soon as sellers add their products.
+              </p>
+            </div>
+          )}
+
           {/* Products Grid */}
-          {!loadingProducts && (
+          {!loadingProducts && sortedProducts.length > 0 && (
             <div className={`grid gap-6 ${
               viewMode === 'grid' 
                 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
@@ -288,11 +281,15 @@ const Products = () => {
                       viewMode === 'list' ? 'w-48 shrink-0' : 'aspect-square'
                     }`}
                   >
-                    <span className={`transition-transform duration-300 group-hover:scale-110 ${
-                      viewMode === 'list' ? 'text-5xl' : 'text-7xl'
-                    }`}>
-                      {product.image}
-                    </span>
+                    {product.image.startsWith('http') ? (
+                      <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className={`transition-transform duration-300 group-hover:scale-110 ${
+                        viewMode === 'list' ? 'text-5xl' : 'text-7xl'
+                      }`}>
+                        {product.image}
+                      </span>
+                    )}
                   </Link>
 
                   {/* Content */}
@@ -310,6 +307,13 @@ const Products = () => {
                       <span className="text-sm text-muted-foreground">({product.reviews})</span>
                     </div>
 
+                    {/* Stock Warning */}
+                    {product.stock > 0 && product.stock < 5 && (
+                      <p className="mt-1 text-xs text-warning font-medium">
+                        Only {product.stock} left in stock
+                      </p>
+                    )}
+
                     <div className="mt-3 flex items-center justify-between">
                       <div>
                         <span className="font-display text-xl font-bold text-primary">
@@ -324,11 +328,16 @@ const Products = () => {
                     </div>
 
                     <div className="mt-3 flex gap-2">
-                      <Button size="sm" className="flex-1" onClick={() => handleAddToCart(product)}>
+                      <Button 
+                        size="sm" 
+                        className="flex-1" 
+                        onClick={() => handleAddToCart(product)}
+                        disabled={product.stock === 0}
+                      >
                         <ShoppingCart className="h-4 w-4" />
-                        Add
+                        {product.stock === 0 ? 'Out of Stock' : 'Add'}
                       </Button>
-                      {product.allowBargain && (
+                      {product.allowBargain && product.stock > 0 && (
                         <Button size="sm" variant="outline" className="flex-1">
                           <MessageSquare className="h-4 w-4" />
                           Offer
@@ -338,13 +347,6 @@ const Products = () => {
                   </div>
                 </div>
               ))}
-            </div>
-          )}
-
-          {/* Empty State */}
-          {!loadingProducts && sortedProducts.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">No products found matching your criteria.</p>
             </div>
           )}
 

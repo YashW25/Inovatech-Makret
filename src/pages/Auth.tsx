@@ -3,10 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { usePlatform } from '@/contexts/PlatformContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Store, Mail, ArrowRight, Loader2, CheckCircle, Lock, User } from 'lucide-react';
+import { Store, Mail, ArrowRight, Loader2, Lock, User, Phone, MapPin, FileCheck } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 type AuthMode = 'signin' | 'signup';
 
@@ -22,9 +23,23 @@ const Auth = () => {
   const [mode, setMode] = useState<AuthMode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // Extended signup fields
+  const [formData, setFormData] = useState({
+    name: '',
+    surname: '',
+    phone: '',
+    addressLine1: '',
+    addressLine2: '',
+    city: '',
+    pinCode: '',
+    district: '',
+    state: '',
+    country: 'India',
+    agreeTerms: false
+  });
 
   // Redirect if already logged in
   useEffect(() => {
@@ -39,10 +54,53 @@ const Auth = () => {
     }
   }, [user, userRole, authLoading, navigate]);
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
   const validateForm = () => {
     try {
       emailSchema.parse(email);
       passwordSchema.parse(password);
+      
+      if (mode === 'signup') {
+        if (!formData.name.trim()) {
+          setError('First name is required');
+          return false;
+        }
+        if (!formData.surname.trim()) {
+          setError('Surname is required');
+          return false;
+        }
+        if (!formData.phone.trim()) {
+          setError('Phone number is required');
+          return false;
+        }
+        if (!formData.addressLine1.trim()) {
+          setError('Address is required');
+          return false;
+        }
+        if (!formData.city.trim()) {
+          setError('City is required');
+          return false;
+        }
+        if (!formData.pinCode.trim()) {
+          setError('PIN code is required');
+          return false;
+        }
+        if (!formData.state.trim()) {
+          setError('State is required');
+          return false;
+        }
+        if (!formData.agreeTerms) {
+          setError('You must agree to the terms and conditions');
+          return false;
+        }
+      }
       return true;
     } catch (e) {
       if (e instanceof z.ZodError) {
@@ -62,26 +120,48 @@ const Auth = () => {
 
     try {
       if (mode === 'signup') {
-        const { error } = await signUp(email, password, fullName);
-        if (error) {
-          if (error.message.includes('already registered')) {
+        const fullName = `${formData.name} ${formData.surname}`;
+        const { error: signUpError } = await signUp(email, password, fullName);
+        
+        if (signUpError) {
+          if (signUpError.message.includes('already registered')) {
             setError('This email is already registered. Please sign in instead.');
           } else {
-            setError(error.message);
+            setError(signUpError.message);
           }
         } else {
+          // Wait for user to be created then update profile
+          const { data: { user: newUser } } = await supabase.auth.getUser();
+          if (newUser) {
+            await supabase
+              .from('profiles')
+              .update({
+                full_name: fullName,
+                surname: formData.surname,
+                phone: formData.phone,
+                address_line_1: formData.addressLine1,
+                address_line_2: formData.addressLine2,
+                city: formData.city,
+                pin_code: formData.pinCode,
+                district: formData.district,
+                state: formData.state,
+                country: formData.country,
+                agree_terms: formData.agreeTerms
+              })
+              .eq('id', newUser.id);
+          }
           toast({
             title: 'Account created!',
             description: 'Welcome to ' + settings.siteName
           });
         }
       } else {
-        const { error } = await signIn(email, password);
-        if (error) {
-          if (error.message.includes('Invalid login credentials')) {
+        const { error: signInError } = await signIn(email, password);
+        if (signInError) {
+          if (signInError.message.includes('Invalid login credentials')) {
             setError('Invalid email or password. Please try again.');
           } else {
-            setError(error.message);
+            setError(signInError.message);
           }
         } else {
           toast({
@@ -114,8 +194,8 @@ const Auth = () => {
 
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/50 flex">
         {/* Left Side - Form */}
-        <div className="flex flex-1 flex-col justify-center px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
-          <div className="mx-auto w-full max-w-sm lg:w-96">
+        <div className={`flex flex-1 flex-col justify-center px-4 py-12 sm:px-6 lg:px-20 xl:px-24 ${mode === 'signup' ? 'overflow-y-auto' : ''}`}>
+          <div className={`mx-auto w-full ${mode === 'signup' ? 'max-w-2xl' : 'max-w-sm lg:w-96'}`}>
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-hero shadow-md">
@@ -138,27 +218,185 @@ const Auth = () => {
 
               <form onSubmit={handleSubmit} className="mt-6 space-y-4">
                 {mode === 'signup' && (
-                  <div>
-                    <label htmlFor="fullName" className="block text-sm font-medium text-foreground">
-                      Full Name
-                    </label>
-                    <div className="relative mt-1">
-                      <User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                      <input
-                        id="fullName"
-                        type="text"
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        placeholder="John Doe"
-                        className="w-full rounded-xl border border-input bg-background py-3 pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                      />
+                  <>
+                    {/* Personal Information */}
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor="name" className="block text-sm font-medium text-foreground">
+                          First Name *
+                        </label>
+                        <div className="relative mt-1">
+                          <User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                          <input
+                            id="name"
+                            name="name"
+                            type="text"
+                            value={formData.name}
+                            onChange={handleInputChange}
+                            placeholder="John"
+                            className="w-full rounded-xl border border-input bg-background py-3 pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label htmlFor="surname" className="block text-sm font-medium text-foreground">
+                          Surname *
+                        </label>
+                        <div className="relative mt-1">
+                          <User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                          <input
+                            id="surname"
+                            name="surname"
+                            type="text"
+                            value={formData.surname}
+                            onChange={handleInputChange}
+                            placeholder="Doe"
+                            className="w-full rounded-xl border border-input bg-background py-3 pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                        </div>
+                      </div>
                     </div>
-                  </div>
+
+                    <div>
+                      <label htmlFor="phone" className="block text-sm font-medium text-foreground">
+                        Phone Number *
+                      </label>
+                      <div className="relative mt-1">
+                        <Phone className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          id="phone"
+                          name="phone"
+                          type="tel"
+                          value={formData.phone}
+                          onChange={handleInputChange}
+                          placeholder="+91 98765 43210"
+                          className="w-full rounded-xl border border-input bg-background py-3 pl-10 pr-4 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Address Section */}
+                    <div className="border-t border-border pt-4">
+                      <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        Address Information
+                      </h3>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <label htmlFor="addressLine1" className="block text-sm font-medium text-foreground">
+                            Address Line 1 *
+                          </label>
+                          <input
+                            id="addressLine1"
+                            name="addressLine1"
+                            type="text"
+                            value={formData.addressLine1}
+                            onChange={handleInputChange}
+                            placeholder="House/Flat No., Building Name, Street"
+                            className="mt-1 w-full rounded-xl border border-input bg-background py-3 px-4 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor="addressLine2" className="block text-sm font-medium text-foreground">
+                            Address Line 2
+                          </label>
+                          <input
+                            id="addressLine2"
+                            name="addressLine2"
+                            type="text"
+                            value={formData.addressLine2}
+                            onChange={handleInputChange}
+                            placeholder="Landmark, Area (Optional)"
+                            className="mt-1 w-full rounded-xl border border-input bg-background py-3 px-4 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                        </div>
+
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <label htmlFor="city" className="block text-sm font-medium text-foreground">
+                              City *
+                            </label>
+                            <input
+                              id="city"
+                              name="city"
+                              type="text"
+                              value={formData.city}
+                              onChange={handleInputChange}
+                              placeholder="Mumbai"
+                              className="mt-1 w-full rounded-xl border border-input bg-background py-3 px-4 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="pinCode" className="block text-sm font-medium text-foreground">
+                              PIN Code *
+                            </label>
+                            <input
+                              id="pinCode"
+                              name="pinCode"
+                              type="text"
+                              value={formData.pinCode}
+                              onChange={handleInputChange}
+                              placeholder="400001"
+                              className="mt-1 w-full rounded-xl border border-input bg-background py-3 px-4 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <label htmlFor="district" className="block text-sm font-medium text-foreground">
+                              District
+                            </label>
+                            <input
+                              id="district"
+                              name="district"
+                              type="text"
+                              value={formData.district}
+                              onChange={handleInputChange}
+                              placeholder="Mumbai Suburban"
+                              className="mt-1 w-full rounded-xl border border-input bg-background py-3 px-4 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="state" className="block text-sm font-medium text-foreground">
+                              State *
+                            </label>
+                            <input
+                              id="state"
+                              name="state"
+                              type="text"
+                              value={formData.state}
+                              onChange={handleInputChange}
+                              placeholder="Maharashtra"
+                              className="mt-1 w-full rounded-xl border border-input bg-background py-3 px-4 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label htmlFor="country" className="block text-sm font-medium text-foreground">
+                            Country *
+                          </label>
+                          <input
+                            id="country"
+                            name="country"
+                            type="text"
+                            value={formData.country}
+                            onChange={handleInputChange}
+                            placeholder="India"
+                            className="mt-1 w-full rounded-xl border border-input bg-background py-3 px-4 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 )}
 
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-foreground">
-                    Email address
+                    Email address *
                   </label>
                   <div className="relative mt-1">
                     <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
@@ -176,7 +414,7 @@ const Auth = () => {
 
                 <div>
                   <label htmlFor="password" className="block text-sm font-medium text-foreground">
-                    Password
+                    Password *
                   </label>
                   <div className="relative mt-1">
                     <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
@@ -191,6 +429,26 @@ const Auth = () => {
                     />
                   </div>
                 </div>
+
+                {mode === 'signup' && (
+                  <div className="flex items-start gap-3">
+                    <input
+                      id="agreeTerms"
+                      name="agreeTerms"
+                      type="checkbox"
+                      checked={formData.agreeTerms}
+                      onChange={handleInputChange}
+                      className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                    />
+                    <label htmlFor="agreeTerms" className="text-sm text-muted-foreground">
+                      I agree to the{' '}
+                      <a href="#" className="text-primary hover:underline">Terms of Service</a>
+                      {' '}and{' '}
+                      <a href="#" className="text-primary hover:underline">Privacy Policy</a>
+                      {' '}*
+                    </label>
+                  </div>
+                )}
 
                 {error && (
                   <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
@@ -240,8 +498,8 @@ const Auth = () => {
           </div>
         </div>
 
-        {/* Right Side - Visual */}
-        <div className="relative hidden flex-1 lg:block">
+        {/* Right Side - Visual (hidden on signup due to form size) */}
+        <div className={`relative flex-1 ${mode === 'signup' ? 'hidden xl:block' : 'hidden lg:block'}`}>
           <div className="absolute inset-0 bg-gradient-to-br from-primary to-accent opacity-90" />
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIyIi8+PC9nPjwvZz48L3N2Zz4=')] opacity-30" />
           
