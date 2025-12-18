@@ -1,116 +1,28 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Heart, ShoppingCart, ArrowRight, Star, MessageSquare, Loader2 } from 'lucide-react';
+import { Heart, ShoppingCart, ArrowRight, Star, MessageSquare, Loader2, Package } from 'lucide-react';
 import { useProducts } from '@/hooks/useProducts';
 import { useCart } from '@/contexts/CartContext';
-
-// Fallback demo products when database is empty
-const demoProducts = [
-  {
-    id: 'demo-1',
-    name: 'Handwoven Rattan Basket Set',
-    seller: 'ArtisanHome',
-    price: 79.99,
-    originalPrice: 99.99,
-    rating: 4.8,
-    reviews: 124,
-    image: '🧺',
-    allowBargain: true,
-    badge: 'Best Seller',
-  },
-  {
-    id: 'demo-2',
-    name: 'Vintage Leather Journal',
-    seller: 'CraftedMemories',
-    price: 45.00,
-    rating: 4.9,
-    reviews: 89,
-    image: '📔',
-    allowBargain: true,
-  },
-  {
-    id: 'demo-3',
-    name: 'Ceramic Plant Pot Collection',
-    seller: 'GreenThumb',
-    price: 65.00,
-    originalPrice: 85.00,
-    rating: 4.7,
-    reviews: 156,
-    image: '🪴',
-    badge: 'Sale',
-  },
-  {
-    id: 'demo-4',
-    name: 'Minimalist Wall Clock',
-    seller: 'ModernSpaces',
-    price: 120.00,
-    rating: 4.6,
-    reviews: 67,
-    image: '🕐',
-    allowBargain: true,
-  },
-  {
-    id: 'demo-5',
-    name: 'Organic Cotton Throw Blanket',
-    seller: 'CozyNest',
-    price: 89.99,
-    rating: 4.9,
-    reviews: 203,
-    image: '🛋️',
-    badge: 'New',
-  },
-  {
-    id: 'demo-6',
-    name: 'Hand-painted Ceramic Mug Set',
-    seller: 'StudioCeramics',
-    price: 55.00,
-    originalPrice: 70.00,
-    rating: 4.8,
-    reviews: 178,
-    image: '☕',
-  },
-  {
-    id: 'demo-7',
-    name: 'Boho Macrame Wall Hanging',
-    seller: 'ThreadArtistry',
-    price: 95.00,
-    rating: 4.7,
-    reviews: 92,
-    image: '🎀',
-    allowBargain: true,
-  },
-  {
-    id: 'demo-8',
-    name: 'Brass Candle Holder Set',
-    seller: 'LuxeDecor',
-    price: 75.00,
-    rating: 4.5,
-    reviews: 54,
-    image: '🕯️',
-  },
-];
 
 const FeaturedProducts = () => {
   const { data: dbProducts, isLoading } = useProducts();
   const { addItem } = useCart();
 
-  // Use database products if available, otherwise show demo products
-  const hasDbProducts = dbProducts && dbProducts.length > 0;
-  
-  const displayProducts = hasDbProducts 
-    ? dbProducts.slice(0, 8).map((p, index) => ({
-        id: p.id,
-        name: p.name,
-        seller: p.sellers?.business_name || 'Seller',
-        price: Number(p.price),
-        originalPrice: p.compare_price ? Number(p.compare_price) : undefined,
-        rating: 4.5 + Math.random() * 0.5,
-        reviews: Math.floor(50 + Math.random() * 150),
-        image: p.images?.[0] || '📦',
-        allowBargain: p.allow_bargain || false,
-        badge: index === 0 ? 'Best Seller' : p.compare_price ? 'Sale' : undefined,
-      }))
-    : demoProducts;
+  // Map database products to display format
+  const displayProducts = (dbProducts || []).slice(0, 8).map((p, index) => ({
+    id: p.id,
+    name: p.name,
+    seller: p.sellers?.business_name || 'Seller',
+    sellerId: p.seller_id,
+    price: Number(p.price),
+    originalPrice: p.compare_price ? Number(p.compare_price) : undefined,
+    rating: 4.5 + Math.random() * 0.5,
+    reviews: Math.floor(50 + Math.random() * 150),
+    image: p.images?.[0] || '📦',
+    allowBargain: p.allow_bargain || false,
+    badge: index === 0 ? 'Best Seller' : p.compare_price ? 'Sale' : undefined,
+    stock: p.stock || 0
+  }));
 
   const handleAddToCart = (product: typeof displayProducts[0]) => {
     addItem({
@@ -118,10 +30,29 @@ const FeaturedProducts = () => {
       name: product.name,
       price: product.price,
       image: product.image,
-      sellerId: 'demo-seller',
+      sellerId: product.sellerId,
       sellerName: product.seller
     });
   };
+
+  // Empty state when no products
+  if (!isLoading && displayProducts.length === 0) {
+    return (
+      <section className="bg-muted/30 py-16 lg:py-24">
+        <div className="container px-4 lg:px-8">
+          <div className="text-center">
+            <Package className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <h2 className="font-display text-2xl font-bold text-foreground mb-2">
+              No Products Yet
+            </h2>
+            <p className="text-muted-foreground max-w-md mx-auto">
+              Products will appear here once sellers add them to the marketplace.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="bg-muted/30 py-16 lg:py-24">
@@ -174,9 +105,13 @@ const FeaturedProducts = () => {
 
                 {/* Image */}
                 <Link to={`/product/${product.id}`} className="relative aspect-square bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">
-                  <span className="text-7xl transition-transform duration-300 group-hover:scale-110">
-                    {product.image}
-                  </span>
+                  {product.image.startsWith('http') ? (
+                    <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-7xl transition-transform duration-300 group-hover:scale-110">
+                      {product.image}
+                    </span>
+                  )}
                 </Link>
 
                 {/* Content */}
@@ -195,6 +130,13 @@ const FeaturedProducts = () => {
                     <span className="text-sm text-muted-foreground">({product.reviews})</span>
                   </div>
 
+                  {/* Stock Warning */}
+                  {product.stock > 0 && product.stock < 5 && (
+                    <p className="mt-1 text-xs text-warning font-medium">
+                      Only {product.stock} left in stock
+                    </p>
+                  )}
+
                   {/* Price & Actions */}
                   <div className="mt-3 flex items-center justify-between">
                     <div>
@@ -211,11 +153,16 @@ const FeaturedProducts = () => {
 
                   {/* Action Buttons */}
                   <div className="mt-3 flex gap-2">
-                    <Button size="sm" className="flex-1" onClick={() => handleAddToCart(product)}>
+                    <Button 
+                      size="sm" 
+                      className="flex-1" 
+                      onClick={() => handleAddToCart(product)}
+                      disabled={product.stock === 0}
+                    >
                       <ShoppingCart className="h-4 w-4" />
-                      Add
+                      {product.stock === 0 ? 'Out of Stock' : 'Add'}
                     </Button>
-                    {product.allowBargain && (
+                    {product.allowBargain && product.stock > 0 && (
                       <Button size="sm" variant="outline" className="flex-1">
                         <MessageSquare className="h-4 w-4" />
                         Offer

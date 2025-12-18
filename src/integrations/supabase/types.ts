@@ -71,6 +71,47 @@ export type Database = {
           },
         ]
       }
+      cart_reservations: {
+        Row: {
+          created_at: string | null
+          expires_at: string
+          id: string
+          is_converted: boolean | null
+          product_id: string
+          quantity: number
+          reserved_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          is_converted?: boolean | null
+          product_id: string
+          quantity?: number
+          reserved_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          is_converted?: boolean | null
+          product_id?: string
+          quantity?: number
+          reserved_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cart_reservations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           created_at: string | null
@@ -336,6 +377,8 @@ export type Database = {
           min_bargain_price: number | null
           name: string
           price: number
+          reserved_stock: number | null
+          reserved_until: string | null
           seller_id: string
           slug: string
           stock: number | null
@@ -355,6 +398,8 @@ export type Database = {
           min_bargain_price?: number | null
           name: string
           price: number
+          reserved_stock?: number | null
+          reserved_until?: string | null
           seller_id: string
           slug: string
           stock?: number | null
@@ -374,6 +419,8 @@ export type Database = {
           min_bargain_price?: number | null
           name?: string
           price?: number
+          reserved_stock?: number | null
+          reserved_until?: string | null
           seller_id?: string
           slug?: string
           stock?: number | null
@@ -398,30 +445,57 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address_line_1: string | null
+          address_line_2: string | null
+          agree_terms: boolean | null
           avatar_url: string | null
+          city: string | null
+          country: string | null
           created_at: string | null
+          district: string | null
           email: string
           full_name: string | null
           id: string
           phone: string | null
+          pin_code: string | null
+          state: string | null
+          surname: string | null
           updated_at: string | null
         }
         Insert: {
+          address_line_1?: string | null
+          address_line_2?: string | null
+          agree_terms?: boolean | null
           avatar_url?: string | null
+          city?: string | null
+          country?: string | null
           created_at?: string | null
+          district?: string | null
           email: string
           full_name?: string | null
           id: string
           phone?: string | null
+          pin_code?: string | null
+          state?: string | null
+          surname?: string | null
           updated_at?: string | null
         }
         Update: {
+          address_line_1?: string | null
+          address_line_2?: string | null
+          agree_terms?: boolean | null
           avatar_url?: string | null
+          city?: string | null
+          country?: string | null
           created_at?: string | null
+          district?: string | null
           email?: string
           full_name?: string | null
           id?: string
           phone?: string | null
+          pin_code?: string | null
+          state?: string | null
+          surname?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -556,6 +630,11 @@ export type Database = {
           total_revenue: number
         }[]
       }
+      cleanup_expired_reservations: { Args: never; Returns: undefined }
+      convert_reservation_to_order: {
+        Args: { p_product_id: string; p_quantity: number; p_user_id: string }
+        Returns: undefined
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -569,6 +648,14 @@ export type Database = {
       }
       is_seller_owner: {
         Args: { _seller_id: string; _user_id: string }
+        Returns: boolean
+      }
+      release_reservation: {
+        Args: { p_product_id: string; p_quantity: number; p_user_id: string }
+        Returns: undefined
+      }
+      reserve_stock: {
+        Args: { p_product_id: string; p_quantity: number; p_user_id: string }
         Returns: boolean
       }
       seed_super_admin: { Args: never; Returns: undefined }
