@@ -8,6 +8,7 @@ import { useSellerProducts } from '@/hooks/useProducts';
 import { useSellerOrders } from '@/hooks/useOrders';
 import { useSellerBargainOffers } from '@/hooks/useBargainOffers';
 import { Helmet } from 'react-helmet-async';
+import ProductFormModal from '@/components/seller/ProductFormModal';
 import { 
   Store, 
   Package, 
@@ -32,6 +33,7 @@ const SellerDashboard = () => {
   const { user, userRole } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
+  const [showProductModal, setShowProductModal] = useState(false);
 
   const { data: currentSeller, isLoading: loadingSeller } = useCurrentSeller();
   const { data: sellerProducts, isLoading: loadingProducts } = useSellerProducts(currentSeller?.id || '');
@@ -213,7 +215,7 @@ const SellerDashboard = () => {
                   Here's what's happening with your store today
                 </p>
               </div>
-              <Button variant="hero">
+              <Button variant="hero" onClick={() => setShowProductModal(true)}>
                 <Plus className="h-4 w-4" />
                 Add Product
               </Button>
@@ -351,6 +353,13 @@ const SellerDashboard = () => {
           </main>
         </div>
       </div>
+
+      {/* Product Form Modal */}
+      <ProductFormModal
+        isOpen={showProductModal}
+        onClose={() => setShowProductModal(false)}
+        sellerId={currentSeller.id}
+      />
     </>
   );
 };
