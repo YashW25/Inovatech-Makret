@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { usePlatform } from '@/contexts/PlatformContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCurrentSeller } from '@/hooks/useSellers';
+import { useCurrentSeller, useRegisterAsSeller } from '@/hooks/useSellers';
 import { useSellerProducts } from '@/hooks/useProducts';
 import { useSellerOrders } from '@/hooks/useOrders';
 import { useSellerBargainOffers } from '@/hooks/useBargainOffers';
 import { Helmet } from 'react-helmet-async';
 import ProductFormModal from '@/components/seller/ProductFormModal';
 import { 
-  Store, 
+  Store,
   Package, 
   ShoppingCart, 
   DollarSign, 
@@ -71,22 +74,9 @@ const SellerDashboard = () => {
     );
   }
 
-  // Not a seller or pending status
+  // Not a seller - show registration form
   if (!currentSeller) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center max-w-md px-4">
-          <AlertCircle className="h-12 w-12 text-warning mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-foreground mb-2">Become a Seller</h1>
-          <p className="text-muted-foreground mb-6">
-            You need to register as a seller to access this dashboard.
-          </p>
-          <Button onClick={() => navigate('/')} variant="hero">
-            Go to Homepage
-          </Button>
-        </div>
-      </div>
-    );
+    return <BecomeSellerForm settings={settings} />;
   }
 
   if (currentSeller.status === 'pending') {
@@ -360,6 +350,102 @@ const SellerDashboard = () => {
         onClose={() => setShowProductModal(false)}
         sellerId={currentSeller.id}
       />
+    </>
+  );
+};
+
+// Become a Seller Registration Form Component
+const BecomeSellerForm = ({ settings }: { settings: any }) => {
+  const [businessName, setBusinessName] = useState('');
+  const [description, setDescription] = useState('');
+  const registerAsSeller = useRegisterAsSeller();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (businessName.trim()) {
+      registerAsSeller.mutate(businessName.trim());
+    }
+  };
+
+  return (
+    <>
+      <Helmet>
+        <title>Become a Seller - {settings.siteName}</title>
+        <meta name="description" content="Register as a seller and start selling your products" />
+      </Helmet>
+
+      <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
+        <div className="w-full max-w-md">
+          <div className="rounded-2xl border border-border bg-card p-8 shadow-lg">
+            <div className="text-center mb-6">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-hero">
+                <Store className="h-8 w-8 text-primary-foreground" />
+              </div>
+              <h1 className="font-display text-2xl font-bold text-foreground">
+                Become a Seller
+              </h1>
+              <p className="mt-2 text-muted-foreground">
+                Start selling your products on {settings.siteName}
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="businessName">Business Name *</Label>
+                <Input
+                  id="businessName"
+                  placeholder="Enter your business name"
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Business Description (optional)</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Tell customers about your business..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              <div className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground mb-1">What happens next?</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Your application will be reviewed</li>
+                  <li>Once approved, you can start adding products</li>
+                  <li>Commission rate: {settings.commissionRate || 10}%</li>
+                </ul>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                variant="hero"
+                disabled={!businessName.trim() || registerAsSeller.isPending}
+              >
+                {registerAsSeller.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  'Submit Application'
+                )}
+              </Button>
+
+              <Link to="/">
+                <Button type="button" variant="ghost" className="w-full">
+                  Back to Homepage
+                </Button>
+              </Link>
+            </form>
+          </div>
+        </div>
+      </div>
     </>
   );
 };
