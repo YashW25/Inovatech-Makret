@@ -21,6 +21,24 @@ interface PlatformSettings {
   hero_image: string | null;
 }
 
+const DEFAULT_SETTINGS = {
+  site_name: 'MarketHub',
+  logo_url: null,
+  favicon_url: null,
+  primary_color: '32 95% 44%',
+  secondary_color: '35 20% 94%',
+  accent_color: '15 75% 55%',
+  font_display: 'Playfair Display',
+  font_body: 'DM Sans',
+  commission_rate: 10,
+  subscription_fee: 0,
+  allow_bargain: true,
+  allow_cod: true,
+  hero_title: 'Discover Unique Products from Trusted Sellers',
+  hero_subtitle: 'A curated marketplace where quality meets authenticity.',
+  hero_image: null,
+};
+
 export const usePlatformSettings = () => {
   return useQuery({
     queryKey: ['platform-settings'],
@@ -32,7 +50,23 @@ export const usePlatformSettings = () => {
         .maybeSingle();
       
       if (error) throw error;
-      return data as PlatformSettings | null;
+      
+      // If no settings exist, create default row
+      if (!data) {
+        const { data: newData, error: insertError } = await supabase
+          .from('platform_settings')
+          .insert(DEFAULT_SETTINGS)
+          .select()
+          .single();
+        
+        if (insertError) {
+          console.error('Error creating default settings:', insertError);
+          return null;
+        }
+        return newData as PlatformSettings;
+      }
+      
+      return data as PlatformSettings;
     }
   });
 };
@@ -50,7 +84,13 @@ export const useUpdatePlatformSettings = () => {
         .maybeSingle();
 
       if (!existing) {
-        throw new Error('Platform settings not found');
+        // Create new settings if none exist
+        const { error: insertError } = await supabase
+          .from('platform_settings')
+          .insert({ ...DEFAULT_SETTINGS, ...updates });
+        
+        if (insertError) throw insertError;
+        return;
       }
 
       const { error } = await supabase
@@ -68,6 +108,7 @@ export const useUpdatePlatformSettings = () => {
       });
     },
     onError: (error) => {
+      console.error('Error updating settings:', error);
       toast({
         title: 'Error',
         description: 'Failed to update settings. Please try again.',
