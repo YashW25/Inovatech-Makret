@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { PlatformSettings } from '@/types/platform';
-import { adminApi } from '@/lib/api';
+import { supabase } from '@/integrations/supabase/client';
 
 const defaultSettings: PlatformSettings = {
   siteName: 'MarketHub',
@@ -18,16 +18,13 @@ const defaultSettings: PlatformSettings = {
   heroTitle: 'Discover Unique Products from Trusted Sellers',
   heroSubtitle: 'A curated marketplace where quality meets authenticity. Shop directly from verified vendors worldwide.',
   heroImage: '',
-  metaDescription: 'A production-ready, fully dynamic, multi-vendor e-commerce platform',
-  ogImage: '',
-  twitterHandle: '',
 };
 
 interface PlatformContextType {
   settings: PlatformSettings;
-  updateSettings: (newSettings: Partial<PlatformSettings>) => Promise<void>;
+  updateSettings: (newSettings: Partial<PlatformSettings>) => void;
   isLoading: boolean;
-  refreshSettings: () => Promise<void>;
+  refetch: () => Promise<void>;
 }
 
 const PlatformContext = createContext<PlatformContextType | undefined>(undefined);
@@ -38,45 +35,58 @@ export const PlatformProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchSettings = async () => {
     try {
-      // Try to fetch from public endpoint first
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/settings`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.settings) {
-          // Merge with defaults to ensure all fields exist
-          setSettings((prev) => ({ ...defaultSettings, ...data.settings }));
-          setIsLoading(false);
-          return;
-        }
+      const { data, error } = await supabase
+        .from('platform_settings')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching platform settings:', error);
+        return;
       }
-    } catch (error) {
-      console.warn('Failed to fetch platform settings, using defaults:', error);
-    }
-    setIsLoading(false);
-  };
 
-  const updateSettings = async (newSettings: Partial<PlatformSettings>) => {
-    try {
-      // Update via admin API if authenticated
-      await adminApi.updateSettings(newSettings);
-      setSettings((prev) => ({ ...prev, ...newSettings }));
-    } catch (error) {
-      // If not authenticated, just update locally
-      setSettings((prev) => ({ ...prev, ...newSettings }));
+      if (data) {
+        setSettings({
+          siteName: data.site_name || defaultSettings.siteName,
+          logo: data.logo_url || defaultSettings.logo,
+          favicon: data.favicon_url || defaultSettings.favicon,
+          primaryColor: data.primary_color || defaultSettings.primaryColor,
+          secondaryColor: data.secondary_color || defaultSettings.secondaryColor,
+          accentColor: data.accent_color || defaultSettings.accentColor,
+          fontDisplay: data.font_display || defaultSettings.fontDisplay,
+          fontBody: data.font_body || defaultSettings.fontBody,
+          commissionRate: data.commission_rate ?? defaultSettings.commissionRate,
+          subscriptionFee: data.subscription_fee ?? defaultSettings.subscriptionFee,
+          allowBargain: data.allow_bargain ?? defaultSettings.allowBargain,
+          allowCOD: data.allow_cod ?? defaultSettings.allowCOD,
+          heroTitle: data.hero_title || defaultSettings.heroTitle,
+          heroSubtitle: data.hero_subtitle || defaultSettings.heroSubtitle,
+          heroImage: data.hero_image || defaultSettings.heroImage,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load platform settings:', err);
+    } finally {
+      setIsLoading(false);
     }
-  };
-
-  const refreshSettings = async () => {
-    setIsLoading(true);
-    await fetchSettings();
   };
 
   useEffect(() => {
     fetchSettings();
   }, []);
 
+  const updateSettings = (newSettings: Partial<PlatformSettings>) => {
+    setSettings((prev) => ({ ...prev, ...newSettings }));
+  };
+
+  const refetch = async () => {
+    setIsLoading(true);
+    await fetchSettings();
+  };
+
   return (
-    <PlatformContext.Provider value={{ settings, updateSettings, isLoading, refreshSettings }}>
+    <PlatformContext.Provider value={{ settings, updateSettings, isLoading, refetch }}>
       {children}
     </PlatformContext.Provider>
   );

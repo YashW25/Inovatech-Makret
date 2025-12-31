@@ -80,7 +80,4 @@ export interface PlatformSettings {
   heroTitle: string;
   heroSubtitle: string;
   heroImage: string;
-  metaDescription: string;
-  ogImage: string;
-  twitterHandle: string;
 }

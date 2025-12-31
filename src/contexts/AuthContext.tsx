@@ -1,123 +1,196 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { authApi, setAuthToken, removeAuthToken, ApiError } from '@/lib/api';
-import { useNavigate } from 'react-router-dom';
-import { UserRole } from '@/types/platform';
+import { User, Session } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
-interface User {
-  id: string;
-  email: string;
-  role: UserRole;
-  isVerified: boolean;
-  seller?: any;
-}
+type AppRole = 'super_admin' | 'seller' | 'customer';
 
 interface AuthContextType {
   user: User | null;
-  loading: boolean;
-  login: (email: string, password: string, role?: UserRole) => Promise<void>;
-  loginWithOTP: (email: string, otp: string, role?: 'customer' | 'seller') => Promise<void>;
-  sendOTP: (email: string, role?: 'customer' | 'seller') => Promise<void>;
-  logout: () => void;
-  isAuthenticated: boolean;
-  hasRole: (role: UserRole) => boolean;
-  hasAnyRole: (roles: UserRole[]) => boolean;
+  session: Session | null;
+  userRole: AppRole;
+  isLoading: boolean;
+  signUp: (email: string, password: string, fullName?: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signOut: () => Promise<void>;
+  sendOTP: (email: string) => Promise<{ error: Error | null }>;
+  verifyOTP: (email: string, token: string) => Promise<{ error: Error | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+  const [session, setSession] = useState<Session | null>(null);
+  const [userRole, setUserRole] = useState<AppRole>('customer'); // Default to customer, never null
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
-  // Load user on mount
+  const fetchUserRole = async (userId: string): Promise<AppRole> => {
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error fetching user role:', error);
+        return 'customer'; // Default to customer on error
+      }
+      
+      return (data?.role as AppRole) || 'customer';
+    } catch (err) {
+      console.error('Error in fetchUserRole:', err);
+      return 'customer'; // Default to customer on error
+    }
+  };
+
   useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const token = localStorage.getItem('auth_token');
-        if (!token) {
-          setLoading(false);
-          return;
-        }
+    let mounted = true;
 
-        const response = await authApi.getMe();
-        setUser(response.user);
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (!mounted) return;
+        
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        // Defer role fetching with setTimeout to prevent deadlock
+        if (session?.user) {
+          setTimeout(async () => {
+            if (!mounted) return;
+            const role = await fetchUserRole(session.user.id);
+            if (mounted) {
+              setUserRole(role);
+            }
+          }, 0);
+        } else {
+          setUserRole('customer'); // Reset to default when logged out
+        }
+      }
+    );
+
+    // THEN check for existing session
+    const initializeAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
+        
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          const role = await fetchUserRole(session.user.id);
+          if (mounted) {
+            setUserRole(role);
+          }
+        }
       } catch (error) {
-        // Token invalid, remove it
-        removeAuthToken();
+        console.error('Error initializing auth:', error);
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     };
 
-    loadUser();
+    initializeAuth();
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const login = async (email: string, password: string, role?: UserRole) => {
+  const signUp = async (email: string, password: string, fullName?: string) => {
     try {
-      const response = await authApi.login(email, password, role);
-      setAuthToken(response.token);
-      setUser(response.user);
+      const redirectUrl = `${window.location.origin}/`;
+      
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            full_name: fullName
+          }
+        }
+      });
+      
+      if (error) throw error;
+      return { error: null };
     } catch (error) {
-      if (error instanceof ApiError) {
-        throw error;
-      }
-      throw new Error('Login failed');
+      return { error: error as Error };
     }
   };
 
-  const sendOTP = async (email: string, role?: 'customer' | 'seller') => {
+  const signIn = async (email: string, password: string) => {
     try {
-      await authApi.sendOTP(email, role);
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      if (error) throw error;
+      return { error: null };
     } catch (error) {
-      if (error instanceof ApiError) {
-        throw error;
-      }
-      throw new Error('Failed to send OTP');
+      return { error: error as Error };
     }
   };
 
-  const loginWithOTP = async (email: string, otp: string, role?: 'customer' | 'seller') => {
-    try {
-      const response = await authApi.verifyOTP(email, otp, role);
-      setAuthToken(response.token);
-      setUser(response.user);
-    } catch (error) {
-      if (error instanceof ApiError) {
-        throw error;
-      }
-      throw new Error('OTP verification failed');
-    }
-  };
-
-  const logout = () => {
-    removeAuthToken();
+  const signOut = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    navigate('/');
+    setSession(null);
+    setUserRole('customer'); // Reset to default
   };
 
-  const hasRole = (role: UserRole): boolean => {
-    return user?.role === role;
+  const sendOTP = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`
+        }
+      });
+      
+      if (error) throw error;
+      return { error: null };
+    } catch (error) {
+      return { error: error as Error };
+    }
   };
 
-  const hasAnyRole = (roles: UserRole[]): boolean => {
-    return user ? roles.includes(user.role) : false;
+  const verifyOTP = async (email: string, token: string) => {
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: 'email'
+      });
+      
+      if (error) throw error;
+      return { error: null };
+    } catch (error) {
+      return { error: error as Error };
+    }
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        login,
-        loginWithOTP,
-        sendOTP,
-        logout,
-        isAuthenticated: !!user,
-        hasRole,
-        hasAnyRole,
-      }}
-    >
+    <AuthContext.Provider value={{
+      user,
+      session,
+      userRole,
+      isLoading,
+      signUp,
+      signIn,
+      signOut,
+      sendOTP,
+      verifyOTP
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -130,4 +203,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
