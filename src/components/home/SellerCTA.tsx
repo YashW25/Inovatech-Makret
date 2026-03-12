@@ -65,15 +65,10 @@ const SellerCTA = () => {
             </div>
 
             <div className="mt-10 flex flex-wrap gap-4">
-              <Link to="/sell">
+              <Link to="/seller/dashboard">
                 <Button variant="hero" size="xl">
-                  Start Selling Free
+                  Become a Seller
                   <ArrowRight className="h-5 w-5" />
-                </Button>
-              </Link>
-              <Link to="/seller-guidelines">
-                <Button variant="glass" size="xl" className="bg-background/10 text-background border-background/20 hover:bg-background/20">
-                  Learn More
                 </Button>
               </Link>
             </div>

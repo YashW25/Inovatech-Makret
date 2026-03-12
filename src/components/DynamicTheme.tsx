@@ -73,10 +73,7 @@ export const DynamicTheme = () => {
   return (
     <Helmet>
       <title>{settings.siteName || 'MarketHub'}</title>
-      <meta name="description" content={settings.metaDescription || 'A production-ready, fully dynamic, multi-vendor e-commerce platform'} />
-      {settings.ogImage && <meta property="og:image" content={settings.ogImage} />}
-      {settings.twitterHandle && <meta name="twitter:site" content={`@${settings.twitterHandle.replace('@', '')}`} />}
-      {settings.twitterHandle && settings.ogImage && <meta name="twitter:image" content={settings.ogImage} />}
+      <meta name="description" content="A production-ready, fully dynamic, multi-vendor e-commerce platform" />
     </Helmet>
   );
 };
