@@ -568,6 +568,7 @@ const AdminDashboard = () => {
               </div>
             )}
 
+            {activeTab === 'settings' && (
               <div className="max-w-2xl">
                 <h1 className="font-display text-2xl font-bold text-foreground mb-8">
                   Platform Settings
