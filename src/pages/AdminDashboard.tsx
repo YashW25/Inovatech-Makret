@@ -27,7 +27,7 @@ import {
   Image,
   Type
 } from 'lucide-react';
-import { useSellers, useUpdateSellerStatus } from '@/hooks/useSellers';
+import { useSellers, useAllSellers, useUpdateSellerStatus } from '@/hooks/useSellers';
 import { useAdminStats } from '@/hooks/useAdminStats';
 import { usePlatformSettings, useUpdatePlatformSettings } from '@/hooks/usePlatformSettings';
 
