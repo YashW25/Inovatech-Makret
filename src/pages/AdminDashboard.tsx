@@ -72,6 +72,7 @@ const AdminDashboard = () => {
   
   const { data: pendingSellers, isLoading: loadingPending } = useSellers('pending');
   const { data: suspendedSellers, isLoading: loadingSuspended } = useSellers('suspended');
+  const { data: allSellers, isLoading: loadingAllSellers } = useAllSellers();
   const { data: adminStats, isLoading: loadingStats } = useAdminStats();
   const { data: dbSettings, isLoading: loadingSettings } = usePlatformSettings();
   const updatePlatformSettings = useUpdatePlatformSettings();
