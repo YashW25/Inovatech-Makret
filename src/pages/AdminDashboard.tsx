@@ -27,7 +27,7 @@ import {
   Image,
   Type
 } from 'lucide-react';
-import { useSellers, useUpdateSellerStatus } from '@/hooks/useSellers';
+import { useSellers, useAllSellers, useUpdateSellerStatus } from '@/hooks/useSellers';
 import { useAdminStats } from '@/hooks/useAdminStats';
 import { usePlatformSettings, useUpdatePlatformSettings } from '@/hooks/usePlatformSettings';
 
@@ -72,6 +72,7 @@ const AdminDashboard = () => {
   
   const { data: pendingSellers, isLoading: loadingPending } = useSellers('pending');
   const { data: suspendedSellers, isLoading: loadingSuspended } = useSellers('suspended');
+  const { data: allSellers, isLoading: loadingAllSellers } = useAllSellers();
   const { data: adminStats, isLoading: loadingStats } = useAdminStats();
   const { data: dbSettings, isLoading: loadingSettings } = usePlatformSettings();
   const updatePlatformSettings = useUpdatePlatformSettings();
@@ -386,6 +387,185 @@ const AdminDashboard = () => {
                   </div>
                 </div>
               </>
+            )}
+
+            {activeTab === 'sellers' && (
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+                  <div>
+                    <h1 className="font-display text-2xl font-bold text-foreground lg:text-3xl">
+                      Manage Sellers
+                    </h1>
+                    <p className="mt-1 text-muted-foreground">
+                      Approve, suspend, or manage seller accounts
+                    </p>
+                  </div>
+                </div>
+
+                {/* Pending Sellers */}
+                {(pendingSellers?.length ?? 0) > 0 && (
+                  <div className="mb-8">
+                    <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-warning" />
+                      Pending Applications
+                      <span className="ml-2 flex h-6 w-6 items-center justify-center rounded-full bg-warning text-xs text-warning-foreground font-bold">
+                        {pendingSellers?.length}
+                      </span>
+                    </h2>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {pendingSellers?.map((seller) => (
+                        <div key={seller.id} className="rounded-2xl border border-warning/30 bg-card p-5">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-warning/10 text-warning font-bold">
+                              {seller.business_name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
+                              Pending
+                            </span>
+                          </div>
+                          <h3 className="font-semibold text-foreground">{seller.business_name}</h3>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {seller.description || 'No description provided'}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Applied {new Date(seller.created_at).toLocaleDateString()}
+                          </p>
+                          <div className="flex gap-2 mt-4">
+                            <Button
+                              size="sm"
+                              variant="seller"
+                              className="flex-1"
+                              onClick={() => handleApproveSeller(seller.id)}
+                              disabled={updateSellerStatus.isPending}
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="flex-1"
+                              onClick={() => handleRejectSeller(seller.id)}
+                              disabled={updateSellerStatus.isPending}
+                            >
+                              <UserX className="h-4 w-4" />
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* All Sellers Table */}
+                <div className="rounded-2xl border border-border bg-card">
+                  <div className="p-5 border-b border-border">
+                    <h2 className="font-semibold text-foreground flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      All Sellers ({allSellers?.length || 0})
+                    </h2>
+                  </div>
+                  {loadingAllSellers ? (
+                    <div className="flex justify-center py-12">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : allSellers?.length === 0 ? (
+                    <div className="py-12 text-center text-muted-foreground">
+                      No sellers registered yet
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-border text-left">
+                            <th className="px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Business</th>
+                            <th className="px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</th>
+                            <th className="px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Commission</th>
+                            <th className="px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Earnings</th>
+                            <th className="px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Charges</th>
+                            <th className="px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Joined</th>
+                            <th className="px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {allSellers?.map((seller) => {
+                            const statusColors: Record<string, string> = {
+                              active: 'bg-success/10 text-success',
+                              pending: 'bg-warning/10 text-warning',
+                              suspended: 'bg-destructive/10 text-destructive',
+                              banned: 'bg-muted text-muted-foreground',
+                            };
+                            return (
+                              <tr key={seller.id} className="hover:bg-muted/50 transition-colors">
+                                <td className="px-5 py-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary font-semibold text-sm">
+                                      {seller.business_name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                      <p className="font-medium text-foreground text-sm">{seller.business_name}</p>
+                                      <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                        {seller.description || '—'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-5 py-4">
+                                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${statusColors[seller.status] || ''}`}>
+                                    {seller.status}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-4 text-sm text-foreground">{seller.commission_rate}%</td>
+                                <td className="px-5 py-4 text-sm text-foreground">${seller.total_earnings}</td>
+                                <td className="px-5 py-4 text-sm text-foreground">
+                                  {(seller.pending_charges ?? 0) > 0 ? (
+                                    <span className="text-destructive font-medium">${seller.pending_charges}</span>
+                                  ) : (
+                                    <span className="text-muted-foreground">$0</span>
+                                  )}
+                                </td>
+                                <td className="px-5 py-4 text-sm text-muted-foreground">
+                                  {new Date(seller.created_at).toLocaleDateString()}
+                                </td>
+                                <td className="px-5 py-4">
+                                  <div className="flex gap-1.5">
+                                    {seller.status === 'pending' && (
+                                      <>
+                                        <Button size="sm" variant="seller" onClick={() => handleApproveSeller(seller.id)} disabled={updateSellerStatus.isPending}>
+                                          Approve
+                                        </Button>
+                                        <Button size="sm" variant="destructive" onClick={() => handleRejectSeller(seller.id)} disabled={updateSellerStatus.isPending}>
+                                          Reject
+                                        </Button>
+                                      </>
+                                    )}
+                                    {seller.status === 'active' && (
+                                      <Button size="sm" variant="warning" onClick={() => updateSellerStatus.mutate({ sellerId: seller.id, status: 'suspended' })} disabled={updateSellerStatus.isPending}>
+                                        Suspend
+                                      </Button>
+                                    )}
+                                    {seller.status === 'suspended' && (
+                                      <Button size="sm" variant="outline" onClick={() => updateSellerStatus.mutate({ sellerId: seller.id, status: 'active' })} disabled={updateSellerStatus.isPending}>
+                                        Reactivate
+                                      </Button>
+                                    )}
+                                    {seller.status === 'banned' && (
+                                      <Button size="sm" variant="outline" onClick={() => updateSellerStatus.mutate({ sellerId: seller.id, status: 'active' })} disabled={updateSellerStatus.isPending}>
+                                        Unban
+                                      </Button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
 
             {activeTab === 'settings' && (
