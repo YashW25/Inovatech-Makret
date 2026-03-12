@@ -56,7 +56,7 @@ const HeroSection = () => {
                   <ArrowRight className="h-5 w-5" />
                 </Button>
               </Link>
-              <Link to="/sell">
+              <Link to="/seller/dashboard">
                 <Button variant="glass" size="xl">
                   Become a Seller
                 </Button>
