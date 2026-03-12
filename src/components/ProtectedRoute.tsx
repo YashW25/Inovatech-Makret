@@ -14,9 +14,9 @@ export const ProtectedRoute = ({
   requiredRole,
   redirectTo = '/auth'
 }: ProtectedRouteProps) => {
-  const { user, loading, hasRole, hasAnyRole } = useAuth();
+  const { user, isLoading, userRole } = useAuth();
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -30,7 +30,7 @@ export const ProtectedRoute = ({
 
   if (requiredRole) {
     const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
-    if (!hasAnyRole(roles)) {
+    if (!roles.includes(userRole as UserRole)) {
       return <Navigate to="/" replace />;
     }
   }
