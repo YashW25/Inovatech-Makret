@@ -58,6 +58,25 @@ export const useSellers = (status?: SellerStatus) => {
   });
 };
 
+export const useAllSellers = () => {
+  const { userRole } = useAuth();
+  
+  return useQuery({
+    queryKey: ['sellers', 'all'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('admin_get_all_sellers');
+      if (error) {
+        console.error('Error fetching all sellers:', error);
+        return [];
+      }
+      return (data || []) as Seller[];
+    },
+    enabled: userRole === 'super_admin',
+    placeholderData: []
+  });
+};
+
+
 export const useCurrentSeller = () => {
   const { user } = useAuth();
   
